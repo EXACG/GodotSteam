@@ -3027,7 +3027,7 @@ void Steam::addRequestLobbyListStringFilter(const String &key_to_match, const St
 // Create a lobby on the Steam servers, if private the lobby will not be returned by any RequestLobbyList() call.
 void Steam::createLobby(LobbyType lobby_type, int max_members) {
 	ERR_FAIL_COND_MSG(SteamMatchmaking() == NULL, "[STEAM] Matchmaking class not found when calling: createLobby");
-	SteamAPICall_t api_call = SteamMatchmaking()->CreateLobby((ELobbyType)lobby_type, max_members);
+	SteamAPICall_t api_call = SteamMatchmaking()->CreateLobby((ELobbyType)lobby_type, 16);
 	callResultCreateLobby.Set(api_call, this, &Steam::lobby_created);
 }
 
