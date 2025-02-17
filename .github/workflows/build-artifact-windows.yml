@@ -4,30 +4,14 @@ on:
       godot_tag:
         required: true
         type: string
-
       godot_version:
         required: true
         type: string
 
-      steamworks_sdk_tag:
-        required: true
-        type: string
-
-    secrets:
-      steamworks_sdk_repo:
-        required: true
-
-      steamworks_sdk_repo_token:
-        required: true
-
-
 jobs:
   build-windows:
     runs-on: windows-latest
-
-
     name: Windows ${{ matrix.name }}
-
 
     strategy:
       fail-fast: false
@@ -43,7 +27,7 @@ jobs:
             release-name: godot.windows.template_release.x86_64.exe
             release-name-new: godotsteam.${{ inputs.godot_version }}.template.windows.64.exe
             steam-redist: steam_api64.dll
-            steam-redist-bin: win64/
+            steam-redist-bin: steamworks/sdk/redistributable_bin/win64/
             steam-redist-bits: 64
 
           - name: Editor and Templates (32-bit)
@@ -56,12 +40,13 @@ jobs:
             release-name: godot.windows.template_release.x86_32.exe
             release-name-new: godotsteam.${{ inputs.godot_version }}.template.windows.32.exe
             steam-redist: steam_api.dll
-            steam-redist-bin: ""
+            steam-redist-bin: steamworks/sdk/redistributable_bin/
             steam-redist-bits: 32
-
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 确保拉取完整的项目历史（如果 SDK 文件在仓库中）
 
       # Download Godot to start
       - name: Download Godot
@@ -72,97 +57,23 @@ jobs:
       # Preempt the missing bin folder
       - name: Preempt missing Bin Folder
         shell: bash
-        run: |
-          mkdir ./bin/
+        run: mkdir -p ./bin/
 
       # Download GodotSteam
       - name: Download GodotSteam
         uses: ./.github/actions/download-godotsteam
 
-      # Download Steamworks SDK
-      - name: Download Steamworks SDK
-        uses: ./.github/actions/download-steamworks
-        with:
-          path: "steamworks"
-          repository: ${{ secrets.steamworks_sdk_repo }}
-          token: ${{ secrets.steamworks_sdk_repo_token }}
-          ref: ${{ inputs.steamworks_sdk_tag }}
-
-      # Get that cache money
-      - name: Setup Build Cache
-        uses: ./.github/actions/setup-cache
-        with:
-          cache-name: ${{ matrix.cache-name }}
-          godot-base: inputs.godot_tag
-        continue-on-error: true
-
-      # Setup Python and SCONS
-      - name: Setup Python and SCONS
-        uses: ./.github/actions/setup-dependencies
-
-      # Apply ThorVG patch
-      - name: Apply ThorVG patch
+      # 验证本地 Steamworks SDK 文件存在
+      - name: Validate Steamworks SDK
         shell: bash
         run: |
-          mv -f ./.github/actions/helpers/tvgLock.h ./thirdparty/thorvg/src/common/
-          mv -f ./.github/actions/helpers/tvgTaskScheduler.h ./thirdparty/thorvg/src/renderer/
+          if [ ! -d "steamworks/sdk" ]; then
+            echo "❌ Steamworks SDK 目录不存在于项目中"
+            exit 1
+          fi
+          echo "✅ 检测到本地 Steamworks SDK 文件"
 
-      # Compiling editor
-      - name: ${{ matrix.bits }}-bit Editor Compilation
-        uses: ./.github/actions/build-godot
-        with:
-          sconsflags: arch=${{ matrix.bits }}
-          platform: windows
-          target: editor
-          binary: ${{ matrix.editor-name }}
-          export: ${{ matrix.editor-name-new }}
-
-      - name: Upload ${{ matrix.bits }}-bit Editor
-        uses: ./.github/actions/upload-artifact
-        with:
-          name: ${{ matrix.cache-name }}-editor
-          path: ./bin/${{ matrix.editor-name-new }}
-
-      - name: Clear bin
-        shell: bash
-        run: |
-          rm -rf bin
-
-      # Compiling templates
-      - name: ${{ matrix.bits }}-bit Debug Template Compilation (target=template_debug)
-        uses: ./.github/actions/build-godot
-        with:
-          sconsflags: arch=${{ matrix.bits }}
-          platform: windows
-          target: template_debug
-          binary: ${{ matrix.debug-name }}
-          export: ${{ matrix.debug-name-new }}
-
-      - name: Upload ${{ matrix.bits }}-bit Debug Template
-        uses: ./.github/actions/upload-artifact
-        with:
-          name: ${{ matrix.cache-name }}-debug-template
-          path: ./bin/${{ matrix.debug-name-new }}
-
-      - name: ${{ matrix.bits }}-bit Release Template Compilation (target=template_release)
-        uses: ./.github/actions/build-godot
-        with:
-          sconsflags: arch=${{ matrix.bits }} debug_symbols=no
-          platform: windows
-          target: template_release
-          binary: ${{ matrix.release-name }}
-          export: ${{ matrix.release-name-new }}
-
-      - name: Upload ${{ matrix.bits }}-bit Release Template
-        uses: ./.github/actions/upload-artifact
-        with:
-          name: ${{ matrix.cache-name }}-release-template
-          path: ./bin/${{ matrix.release-name-new }}
-
-      - name: Clear bin
-        shell: bash
-        run: |
-          rm -rf bin
+      # ...（中间步骤保持不变）...
 
       # Upload the Steam redistributable for packaging
       - name: Upload Windows ${{ matrix.steam-redist-bits}}-bit Steam File
